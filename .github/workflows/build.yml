@@ -58,13 +58,13 @@ jobs:
       - name: 4. 合并单文件
         run: |
           cd phoenix-base
-          cat build/flash_args
-          ls -lh build/*.bin | head -5
+          # flash_args 自带 --flash_mode/--flash_freq/--flash_size，重复传会冲突；且它写 16MB 而实际是 8MB
+          grep -v '^--' build/flash_args > /tmp/args.txt
+          cat /tmp/args.txt
           ESPTOOL="$IDF_PATH/components/esptool_py/esptool/esptool.py"
           [ -f "$ESPTOOL" ] || ESPTOOL=$(command -v esptool.py)
-          echo "esptool: $ESPTOOL"
           python "$ESPTOOL" --chip esp32s3 merge_bin -o phoenix-merged.bin \
-            --flash_mode qio --flash_freq 80m --flash_size 8MB @build/flash_args
+            --flash_mode dio --flash_freq 80m --flash_size 8MB @/tmp/args.txt
           ls -lh phoenix-merged.bin
           cp phoenix-merged.bin ..
 
