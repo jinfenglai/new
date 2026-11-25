@@ -40,15 +40,9 @@ jobs:
           test -f phoenix-base/CMakeLists.txt || { echo "::error::解压后没有 CMakeLists.txt"; exit 1; }
           # 基座 fam_config.py 引用了不存在的应用 tagtinker，配置阶段会抛
           # FlipperManifestException；这里把它注释掉（找不到就跳过）
-          # 主题组件缺公开声明，补到 header 末尾（云端 zip 内文件）
-          cat >> phoenix-base/components/phx_palette/include/phx_palette.h <<'HDR'
-
-#include <stdbool.h>
-bool phx_palette_apply(uint32_t idx);
-uint32_t phx_palette_current(void);
-uint32_t phx_palette_next(void);
-void phx_palette_boot(void);
-HDR
+          # 主题组件缺公开声明 -> 追加到 header（printf 单行，避免破坏 YAML 缩进）
+          printf '\n#include <stdbool.h>\nbool phx_palette_apply(uint32_t idx);\nuint32_t phx_palette_current(void);\nuint32_t phx_palette_next(void);\nvoid phx_palette_boot(void);\n' >> phoenix-base/components/phx_palette/include/phx_palette.h
+          tail -6 phoenix-base/components/phx_palette/include/phx_palette.h
           # ESP-IDF 5.4 里 spi_master 不是独立组件（并入 driver），去掉该依赖
           for f in phoenix-base/components/phx_subghz/CMakeLists.txt phoenix-base/components/phx_board/CMakeLists.txt; do
             [ -f "$f" ] && sed -i 's/ *spi_master//' "$f" && echo "已修 $f"
