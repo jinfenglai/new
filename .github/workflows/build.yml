@@ -43,8 +43,11 @@ jobs:
           # 主题组件缺公开声明 -> 追加到 header（printf 单行，避免破坏 YAML 缩进）
           printf '\n#include <stdbool.h>\nbool phx_palette_apply(uint32_t idx);\nuint32_t phx_palette_current(void);\nuint32_t phx_palette_next(void);\nvoid phx_palette_boot(void);\n' >> phoenix-base/components/phx_palette/include/phx_palette.h
           tail -6 phoenix-base/components/phx_palette/include/phx_palette.h
+          # 图标资源在单独的 phx-assets.zip 里（原 zip 打包时被过滤），解压覆盖回去
+          if [ -f phx-assets.zip ]; then unzip -q -o phx-assets.zip -d phoenix-base && echo "图标资源已补齐"; fi
+          echo "png 数量: $(find phoenix-base -name '*.png' | wc -l)"
           # 打包时过滤掉了图标资源，findmy 的 findmy_icons.h 生成不出来 -> 暂时移出构建
-          sed -i 's/^[[:space:]]*"findmy",/    # "findmy",/' phoenix-base/fam_config.py || true
+          true  # findmy 保留
           grep -n 'findmy' phoenix-base/fam_config.py || true
           # ESP-IDF 5.4 里 spi_master 不是独立组件（并入 driver），去掉该依赖
           for f in phoenix-base/components/phx_subghz/CMakeLists.txt phoenix-base/components/phx_board/CMakeLists.txt; do
