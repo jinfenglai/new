@@ -43,6 +43,8 @@ jobs:
           # 主题组件缺公开声明 -> 追加到 header（printf 单行，避免破坏 YAML 缩进）
           printf '\n#include <stdbool.h>\nbool phx_palette_apply(uint32_t idx);\nuint32_t phx_palette_current(void);\nuint32_t phx_palette_next(void);\nvoid phx_palette_boot(void);\n' >> phoenix-base/components/phx_palette/include/phx_palette.h
           tail -6 phoenix-base/components/phx_palette/include/phx_palette.h
+          # i2c_config_t 用的是 sda_pullup_en/scl_pullup_en（与 gpio 的 pull_up_en 不同）
+          find phoenix-base/components -name "phx_*.c" -exec sed -i 's/sda_pull_up_en/sda_pullup_en/g; s/scl_pull_up_en/scl_pullup_en/g' {} \;
           # gpio_config_t 字段名修正（pull_up_en / pull_down_en）
           find phoenix-base/components -name "phx_*.c" -exec sed -i 's/pullup_en/pull_up_en/g; s/pulldown_en/pull_down_en/g' {} \;
           # 图标资源在单独的 phx-assets.zip 里（原 zip 打包时被过滤），解压覆盖回去
