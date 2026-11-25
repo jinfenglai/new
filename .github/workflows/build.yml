@@ -55,23 +55,18 @@ jobs:
           path: 'phoenix-base'
           command: 'python -m pip install --quiet pillow && idf.py build'
 
-      - name: 4. 合并单文件
-        run: |
-          cd phoenix-base
-          # flash_args 自带 --flash_mode/--flash_freq/--flash_size，重复传会冲突；且它写 16MB 而实际是 8MB
-          grep -v '^--' build/flash_args > /tmp/args.txt
-          cat /tmp/args.txt
-          ESPTOOL="$IDF_PATH/components/esptool_py/esptool/esptool.py"
-          [ -f "$ESPTOOL" ] || ESPTOOL=$(command -v esptool.py)
-          python "$ESPTOOL" --chip esp32s3 merge_bin -o phoenix-merged.bin \
-            --flash_mode dio --flash_freq 80m --flash_size 8MB @/tmp/args.txt
-          ls -lh phoenix-merged.bin
-          cp phoenix-merged.bin ..
+      - name: 4. 合并单文件（在 IDF 容器内）
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.4.1
+          target: esp32s3
+          path: 'phoenix-base'
+          command: 'esptool.py --chip esp32s3 merge_bin -o phoenix-merged.bin --flash_mode dio --flash_freq 80m --flash_size 8MB 0x0 build/bootloader/bootloader.bin 0x8000 build/partition_table/partition-table.bin 0xf000 build/ota_data_initial.bin 0x20000 build/furi_esp32.bin'
 
       - name: 5. 上传
         uses: actions/upload-artifact@v4
         with:
           name: phoenix-firmware
           path: |
-            phoenix-merged.bin
+            phoenix-base/phoenix-merged.bin
             phoenix-base/build/*.bin
