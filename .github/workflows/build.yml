@@ -40,6 +40,10 @@ jobs:
           test -f phoenix-base/CMakeLists.txt || { echo "::error::解压后没有 CMakeLists.txt"; exit 1; }
           # 基座 fam_config.py 引用了不存在的应用 tagtinker，配置阶段会抛
           # FlipperManifestException；这里把它注释掉（找不到就跳过）
+          # ESP-IDF 5.4 里 spi_master 不是独立组件（并入 driver），去掉该依赖
+          for f in phoenix-base/components/phx_subghz/CMakeLists.txt phoenix-base/components/phx_board/CMakeLists.txt; do
+            [ -f "$f" ] && sed -i 's/ *spi_master//' "$f" && echo "已修 $f"
+          done
           if [ -f phoenix-base/fam_config.py ]; then
             sed -i 's/^[[:space:]]*"tagtinker",/    # "tagtinker",/' phoenix-base/fam_config.py
             echo "已处理 tagtinker:"; grep -n tagtinker phoenix-base/fam_config.py || echo "  已移除"
