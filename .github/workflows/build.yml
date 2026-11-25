@@ -1,51 +1,67 @@
-# 凤凰固件 · 云端自动编译（GitHub Actions）
-# 用法：把 phoenix-base 目录推到 GitHub 仓库根目录 → Actions 自动跑 → 下载 Artifact
-# 产物：phoenix-merged.bin（0x0 单文件烧录包）+ 三个分区文件
 name: build-phoenix
-
 on:
-  push:
-    branches: [ main, master ]
+  push: { branches: [ main, master ] }
   workflow_dispatch:
-  release:
-    types: [ created ]
-
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: 取源码
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 确认工程结构
+      - name: 1. 看清仓库里有什么
         run: |
-          ls -la
-          test -f CMakeLists.txt || { echo "::error::请在仓库根目录放 phoenix-base 内容"; exit 1; }
+          echo "=== 根目录 ==="; ls -la
+          echo "=== 找 zip ==="; find . -maxdepth 2 -name "*.zip" -printf "%p %k KB\n" || true
+          echo "=== 找 CMakeLists ==="; find . -maxdepth 3 -name "CMakeLists.txt" | head
 
-      - name: 编译（ESP-IDF 5.4.1 / esp32s3）
+      - name: 2. 准备源码目录
+        run: |
+          set -e
+          mkdir -p phoenix-base
+          ZIP=$(find . -maxdepth 2 -name "*.zip" | head -1)
+          if [ -n "$ZIP" ]; then
+            echo "解压 $ZIP"
+            unzip -q -o "$ZIP" -d xtmp
+            if [ -d xtmp/phoenix-base ]; then
+              cp -a xtmp/phoenix-base/. phoenix-base/
+            else
+              ROOT=$(dirname "$(find xtmp -maxdepth 3 -name CMakeLists.txt | head -1)")
+              echo "源码根: $ROOT"
+              cp -a "$ROOT"/. phoenix-base/
+            fi
+          elif [ -f CMakeLists.txt ]; then
+            echo "源码已在根目录"
+            cp -a . phoenix-base/ 2>/dev/null || true
+          else
+            echo "::error::仓库里既没有 zip 也没有 CMakeLists.txt，请上传 基座-已打补丁.zip"; exit 1
+          fi
+          echo "=== phoenix-base 内容 ==="; ls phoenix-base | head -20
+          test -f phoenix-base/CMakeLists.txt || { echo "::error::解压后没有 CMakeLists.txt"; exit 1; }
+
+      - name: 3. 编译（ESP-IDF 5.4.1 / esp32s3）
         uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: v5.4.1
           target: esp32s3
-          path: '.'
+          path: 'phoenix-base'
           command: 'idf.py build'
 
-      - name: 合并成单文件烧录包
+      - name: 4. 合并单文件
         run: |
           python -m pip install --quiet esptool
+          cd phoenix-base
           python -m esptool --chip esp32s3 merge_bin \
             -o phoenix-merged.bin --flash_mode qio --flash_freq 80m --flash_size 8MB \
             @build/flash_args
           ls -lh phoenix-merged.bin
+          cp phoenix-merged.bin ..
 
-      - name: 上传产物
+      - name: 5. 上传产物
         uses: actions/upload-artifact@v4
         with:
           name: phoenix-firmware
           path: |
             phoenix-merged.bin
-            build/phoenix.bin
-            build/bootloader/bootloader.bin
-            build/partition_table/partition-table.bin
+            phoenix-base/build/phoenix.bin
           if-no-files-found: error
