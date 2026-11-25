@@ -38,6 +38,12 @@ jobs:
           fi
           echo "=== phoenix-base 内容 ==="; ls phoenix-base | head -20
           test -f phoenix-base/CMakeLists.txt || { echo "::error::解压后没有 CMakeLists.txt"; exit 1; }
+          # 基座 fam_config.py 引用了不存在的应用 tagtinker，配置阶段会抛
+          # FlipperManifestException；这里把它注释掉（找不到就跳过）
+          if [ -f phoenix-base/fam_config.py ]; then
+            sed -i 's/^[[:space:]]*"tagtinker",/    # "tagtinker",/' phoenix-base/fam_config.py
+            echo "已处理 tagtinker:"; grep -n tagtinker phoenix-base/fam_config.py || echo "  已移除"
+          fi
 
       - name: 3. 编译（ESP-IDF 5.4.1 / esp32s3）
         uses: espressif/esp-idf-ci-action@v1
