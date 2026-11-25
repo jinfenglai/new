@@ -57,10 +57,14 @@ jobs:
 
       - name: 4. 合并单文件
         run: |
-          python -m pip install --quiet esptool
           cd phoenix-base
-          python -m esptool --chip esp32s3 merge_bin -o phoenix-merged.bin \
+          ls -l build/phoenix.bin build/flash_args
+          ESPTOOL="$IDF_PATH/components/esptool_py/esptool/esptool.py"
+          [ -f "$ESPTOOL" ] || ESPTOOL=$(command -v esptool.py)
+          echo "esptool: $ESPTOOL"
+          python "$ESPTOOL" --chip esp32s3 merge_bin -o phoenix-merged.bin \
             --flash_mode qio --flash_freq 80m --flash_size 8MB @build/flash_args
+          ls -lh phoenix-merged.bin
           cp phoenix-merged.bin ..
 
       - name: 5. 上传
