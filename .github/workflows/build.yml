@@ -58,7 +58,8 @@ jobs:
       - name: 4. 合并单文件
         run: |
           cd phoenix-base
-          ls -l build/phoenix.bin build/flash_args
+          cat build/flash_args
+          ls -lh build/*.bin | head -5
           ESPTOOL="$IDF_PATH/components/esptool_py/esptool/esptool.py"
           [ -f "$ESPTOOL" ] || ESPTOOL=$(command -v esptool.py)
           echo "esptool: $ESPTOOL"
@@ -73,4 +74,4 @@ jobs:
           name: phoenix-firmware
           path: |
             phoenix-merged.bin
-            phoenix-base/build/phoenix.bin
+            phoenix-base/build/*.bin
