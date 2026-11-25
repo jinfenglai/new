@@ -36,6 +36,8 @@ jobs:
             [ -f "$f" ] && sed -i 's/ *spi_master//' "$f"
           done
           grep -n REQUIRES components/phx_subghz/CMakeLists.txt || true
+          # 大小写不一致：代码 include "RGB_LED_icons.h"，生成的是 rgb_led_icons.h（Linux 区分大小写）
+          sed -i 's/^[[:space:]]*"rgb_led",/    # "rgb_led",/' fam_config.py || true
           # 基座配置里不存在的应用
           sed -i 's/^[[:space:]]*"tagtinker",/    # "tagtinker",/' fam_config.py || true
           echo "--- 校验 ---"
