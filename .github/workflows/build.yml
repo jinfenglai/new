@@ -31,6 +31,11 @@ jobs:
           for f in components/phx_*/*.c; do
             sed -i 's/sda_pull_up_en/sda_pullup_en/g; s/scl_pull_up_en/scl_pullup_en/g' "$f"
           done
+          # ESP-IDF 5.4 无 spi_master 组件（并入 driver）
+          for f in components/phx_subghz/CMakeLists.txt components/phx_board/CMakeLists.txt; do
+            [ -f "$f" ] && sed -i 's/ *spi_master//' "$f"
+          done
+          grep -n REQUIRES components/phx_subghz/CMakeLists.txt || true
           # 基座配置里不存在的应用
           sed -i 's/^[[:space:]]*"tagtinker",/    # "tagtinker",/' fam_config.py || true
           echo "--- 校验 ---"
