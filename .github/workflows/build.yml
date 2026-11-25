@@ -9,55 +9,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 1. 看清仓库里有什么
-        run: |
-          echo "=== 根目录 ==="; ls -la
-          echo "=== 找 zip ==="; find . -maxdepth 2 -name "*.zip" -printf "%p %k KB\n" || true
-          echo "=== 找 CMakeLists ==="; find . -maxdepth 3 -name "CMakeLists.txt" | head
-
-      - name: 2. 准备源码目录
+      - name: 1. 准备源码
         run: |
           set -e
           mkdir -p phoenix-base
-          ZIP=$(find . -maxdepth 2 -name "*.zip" | head -1)
-          if [ -n "$ZIP" ]; then
-            echo "解压 $ZIP"
-            unzip -q -o "$ZIP" -d xtmp
-            if [ -d xtmp/phoenix-base ]; then
-              cp -a xtmp/phoenix-base/. phoenix-base/
-            else
-              ROOT=$(dirname "$(find xtmp -maxdepth 3 -name CMakeLists.txt | head -1)")
-              echo "源码根: $ROOT"
-              cp -a "$ROOT"/. phoenix-base/
-            fi
-          elif [ -f CMakeLists.txt ]; then
-            echo "源码已在根目录"
-            cp -a . phoenix-base/ 2>/dev/null || true
-          else
-            echo "::error::仓库里既没有 zip 也没有 CMakeLists.txt，请上传 基座-已打补丁.zip"; exit 1
-          fi
-          echo "=== phoenix-base 内容 ==="; ls phoenix-base | head -20
-          test -f phoenix-base/CMakeLists.txt || { echo "::error::解压后没有 CMakeLists.txt"; exit 1; }
-          # 基座 fam_config.py 引用了不存在的应用 tagtinker，配置阶段会抛
-          # FlipperManifestException；这里把它注释掉（找不到就跳过）
-          # 主题组件缺公开声明 -> 追加到 header（printf 单行，避免破坏 YAML 缩进）
-          printf '\n#include <stdbool.h>\nbool phx_palette_apply(uint32_t idx);\nuint32_t phx_palette_current(void);\nuint32_t phx_palette_next(void);\nvoid phx_palette_boot(void);\n' >> phoenix-base/components/phx_palette/include/phx_palette.h
-          tail -6 phoenix-base/components/phx_palette/include/phx_palette.h
-          if [ -f phx-assets.zip ]; then unzip -q -o phx-assets.zip -d phoenix-base && echo "图标资源已补齐"; fi
-          echo "png 数量: $(find phoenix-base -name '*.png' | wc -l)"
-          # 打包时过滤掉了图标资源，findmy 的 findmy_icons.h 生成不出来 -> 暂时移出构建
-          true  # findmy 保留
-          grep -n 'findmy' phoenix-base/fam_config.py || true
-          # ESP-IDF 5.4 里 spi_master 不是独立组件（并入 driver），去掉该依赖
-          for f in phoenix-base/components/phx_subghz/CMakeLists.txt phoenix-base/components/phx_board/CMakeLists.txt; do
-            [ -f "$f" ] && sed -i 's/ *spi_master//' "$f" && echo "已修 $f"
-          done
-          if [ -f phoenix-base/fam_config.py ]; then
-            sed -i 's/^[[:space:]]*"tagtinker",/    # "tagtinker",/' phoenix-base/fam_config.py
-            echo "已处理 tagtinker:"; grep -n tagtinker phoenix-base/fam_config.py || echo "  已移除"
-          fi
+          ZIP=$(ls *.zip | grep -v phx-assets | head -1)
+          unzip -q -o "$ZIP" -d xtmp
+          cp -a xtmp/phoenix-base/. phoenix-base/ || cp -a xtmp/*/. phoenix-base/
+          if [ -f phx-assets.zip ]; then unzip -q -o phx-assets.zip -d phoenix-base; fi
+          echo "png: $(find phoenix-base -name '*.png' | wc -l)"
+          test -f phoenix-base/CMakeLists.txt
 
-      - name: 3. 编译（ESP-IDF 5.4.1 / esp32s3）
+      - name: 2. 统一修正源码（字段名等）
+        run: |
+          cd phoenix-base
+          # gpio_config_t: .pullup_en -> .pull_up_en（点号锚定，不动 i2c 的 sda_pullup_en）
+          for f in components/phx_*/*.c; do
+            sed -i 's/\.pullup_en/.pull_up_en/g; s/\.pulldown_en/.pull_down_en/g' "$f"
+          done
+          # i2c_config_t 恢复正确写法
+          for f in components/phx_*/*.c; do
+            sed -i 's/sda_pull_up_en/sda_pullup_en/g; s/scl_pull_up_en/scl_pullup_en/g' "$f"
+          done
+          # 基座配置里不存在的应用
+          sed -i 's/^[[:space:]]*"tagtinker",/    # "tagtinker",/' fam_config.py || true
+          echo "--- 校验 ---"
+          grep -rn "pullup_en\|pull_up_en" components/phx_nfc/phx_nfc_i2c.c | head -2 || true
+          grep -rn "pullup_en\|pull_up_en" components/phx_subghz/phx_cc1101_bus_esp.c | head -2 || true
+
+      - name: 3. 编译
         uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: v5.4.1
@@ -69,17 +49,14 @@ jobs:
         run: |
           python -m pip install --quiet esptool
           cd phoenix-base
-          python -m esptool --chip esp32s3 merge_bin \
-            -o phoenix-merged.bin --flash_mode qio --flash_freq 80m --flash_size 8MB \
-            @build/flash_args
-          ls -lh phoenix-merged.bin
+          python -m esptool --chip esp32s3 merge_bin -o phoenix-merged.bin \
+            --flash_mode qio --flash_freq 80m --flash_size 8MB @build/flash_args
           cp phoenix-merged.bin ..
 
-      - name: 5. 上传产物
+      - name: 5. 上传
         uses: actions/upload-artifact@v4
         with:
           name: phoenix-firmware
           path: |
             phoenix-merged.bin
             phoenix-base/build/phoenix.bin
-          if-no-files-found: error
