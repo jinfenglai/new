@@ -48,7 +48,7 @@ jobs:
           esp_idf_version: v5.4.1
           target: esp32s3
           path: 'phoenix-base'
-          command: 'idf.py build'
+          command: 'python -m pip install --quiet pillow && idf.py build'
 
       - name: 4. 合并单文件
         run: |
